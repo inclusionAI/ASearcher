@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASearcher Agent</title>
+    <link rel="stylesheet" href="client_styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 ASearcher Agent</h1>
+        </div>
+
+        <div class="main-content">
+            <!-- 状态栏 -->
+            <div class="status-bar">
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">正在连接服务器...</span>
+                </div>
+                <div id="serviceInfo"></div>
+            </div>
+
+            <!-- 控制面板 -->
+            <div class="controls">
+                <div class="input-group">
+                    <div class="input-row">
+                        <input type="text" id="queryInput" class="query-input" 
+                               placeholder="请输入您的问题..." 
+                               onkeypress="handleKeyPress(event)">
+                    </div>
+                    <div class="config-row">
+                        <div class="config-group">
+                            <label>Agent类型</label>
+                            <select id="agentType">
+                                <option value="asearcher">Asearcher</option>
+                                <option value="asearcher-reasoning">AsearcherReasoning</option>
+                                <option value="search-r1">SearchR1</option>
+                            </select>
+                        </div>
+                        <div class="config-group">
+                            <label>Prompt类型</label>
+                            <select id="promptType">
+                                <option value="asearcher">Default</option>
+                            </select>
+                        </div>
+                        <div class="config-group">
+                            <label>最大轮次</label>
+                            <input type="number" id="maxTurns" value="32" min="1" max="50">
+                        </div>
+                        <div class="config-group">
+                            <label>使用Jina</label>
+                            <select id="useJina">
+                                <option value="true">是</option>
+                                <option value="false">否</option>
+                            </select>
+                        </div>
+                        <div class="config-group">
+                            <label>温度</label>
+                            <input type="number" id="temperature" value="0.6" min="0" max="2" step="0.1">
+                        </div>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-primary" id="startBtn" onclick="startQuery()">
+                        🚀 开始查询
+                    </button>
+                    <button class="btn btn-danger" id="cancelBtn" onclick="cancelQuery()" disabled>
+                        ⏹️ 取消查询
+                    </button>
+                    <button class="btn btn-success btn-small" onclick="openSaveModal()">
+                        💾 保存轨迹
+                    </button>
+                    <button class="btn btn-secondary btn-small" onclick="openSaveModal()">
+                        📂 加载轨迹
+                    </button>
+                </div>
+            </div>
+
+            <!-- 轨迹显示 -->
+            <div class="trajectory-container">
+                <div class="trajectory-header">
+                    <div class="trajectory-title">🔍 执行轨迹</div>
+                    <div class="trajectory-controls">
+                        <button class="btn btn-secondary btn-small" onclick="clearTrajectory()">
+                            🗑️ 清空
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="openImportModal()">
+                            📤 导入
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="exportTrajectory()">
+                            💾 导出
+                        </button>
+                    </div>
+                </div>
+                <div id="trajectory">
+                    <div class="loading" style="display: none;" id="loadingIndicator">
+                        <div class="spinner"></div>
+                        等待开始...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 保存模态框 -->
+    <div id="saveModal" class="save-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💾 保存执行轨迹</h2>
+                <span class="close" onclick="closeSaveModal()">&times;</span>
+            </div>
+            <div>
+                <label for="trajectoryName">轨迹名称:</label>
+                <input type="text" id="trajectoryName" class="query-input" 
+                       placeholder="请输入轨迹名称..." style="margin: 10px 0;">
+                <label for="trajectoryDescription">描述 (可选):</label>
+                <textarea id="trajectoryDescription" class="query-input" 
+                         placeholder="请输入描述..." style="margin: 10px 0; height: 80px; resize: vertical;"></textarea>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="saveCurrentTrajectory()">保存</button>
+                    <button class="btn btn-secondary" onclick="closeSaveModal()">取消</button>
+                </div>
+            </div>
+            
+            <div class="saved-trajectories" id="savedTrajectoriesContainer">
+                <h3>📚 已保存的轨迹</h3>
+                <div id="savedTrajectories"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导入模态框 -->
+    <div id="importModal" class="save-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📤 导入执行轨迹</h2>
+                <span class="close" onclick="closeImportModal()">&times;</span>
+            </div>
+            <div>
+                <div style="margin: 20px 0;">
+                    <label for="trajectoryFile" style="display: block; margin-bottom: 10px; font-weight: bold;">
+                        选择轨迹文件 (JSON格式):
+                    </label>
+                    <input type="file" id="trajectoryFile" accept=".json" 
+                           style="width: 100%; padding: 10px; border: 2px dashed #ccc; border-radius: 8px; cursor: pointer;"
+                           onchange="handleFileSelect(event)">
+                    <div style="margin-top: 10px; color: #666; font-size: 14px;">
+                        支持导入之前导出的轨迹JSON文件
+                    </div>
+                </div>
+                
+                <div id="filePreview" style="display: none; margin: 20px 0;">
+                    <h4>📄 文件预览:</h4>
+                    <div id="fileInfo" style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <!-- 文件信息将在这里显示 -->
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="importTrajectory()">导入并展示</button>
+                        <button class="btn btn-secondary" onclick="clearFileSelection()">重新选择</button>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="closeImportModal()">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="client_script.js"></script>
+</body>
+</html>
