@@ -28,7 +28,7 @@ This directory contains the visual demo for ASearcher, allowing you to interact 
 
     Then start the demo service:
     ```bash
-    bash demo/start_visual_demo.sh
+    python asearcher_demo.py --llm-url llm_url --api-key api_key --model-name ASearcher --use-chat-completion
     ```
 
 3.  **Open the Client:**

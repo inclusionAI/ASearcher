@@ -89,10 +89,11 @@ class CompatibleLLMResponse:
 
 class AsyncVLLMClient:
     """Async vLLM client using OpenAI compatible API"""
-    def __init__(self, llm_url: str, model_name: str = "default", api_key: str = "EMPTY"):
+    def __init__(self, llm_url: str, model_name: str = "default", api_key: str = "EMPTY", use_chat_completion: bool = True):
         self.llm_url = llm_url.rstrip('/')
         self.model_name = model_name
         self.api_key = api_key
+        self.use_chat_completion = use_chat_completion
         
         self.client = AsyncOpenAI(
             base_url=f"{self.llm_url}/v1",
@@ -102,38 +103,51 @@ class AsyncVLLMClient:
     
     async def async_generate(self, prompt: str, sampling_kwargs: Dict) -> Dict:
         """Generate text asynchronously"""
-        completion_kwargs = {
+        base_kwargs = {
             "model": self.model_name,
-            "prompt": prompt,
             "max_tokens": sampling_kwargs.get("max_new_tokens", 4096),
             "temperature": sampling_kwargs.get("temperature", 0.0),
             "top_p": sampling_kwargs.get("top_p", 1.0),
             "stream": False,
         }
-        
+
         stop_sequences = sampling_kwargs.get("stop", [])
         if stop_sequences:
-            completion_kwargs["stop"] = stop_sequences
-        
+            base_kwargs["stop"] = stop_sequences
+
         extra_body = {}
         if "top_k" in sampling_kwargs and sampling_kwargs["top_k"] > 0:
             extra_body["top_k"] = sampling_kwargs["top_k"]
-        
+
         if "stop_token_ids" in sampling_kwargs:
             extra_body["stop_token_ids"] = sampling_kwargs["stop_token_ids"]
-        
+
         if extra_body:
-            completion_kwargs["extra_body"] = extra_body
-        
-        logger.info(f"Calling vLLM API: {completion_kwargs}")
-        
-        response = await self.client.completions.create(**completion_kwargs)
-        
-        if response.choices and len(response.choices) > 0:
-            choice = response.choices[0]
-            return {"text": choice.text, "finish_reason": choice.finish_reason}
+            base_kwargs["extra_body"] = extra_body
+
+        if self.use_chat_completion:
+            completion_kwargs = dict(base_kwargs)
+            completion_kwargs["messages"] = [{"role": "user", "content": prompt}]
+            logger.info(f"Calling vLLM Chat API: {{'model': '{self.model_name}', 'use_chat': True, 'max_tokens': {base_kwargs['max_tokens']}}}")
+            response = await self.client.chat.completions.create(**completion_kwargs)
+            if response.choices and len(response.choices) > 0:
+                choice = response.choices[0]
+                # Prefer chat message content; fallback to text if provided by server
+                text = getattr(choice, "message", None).content if getattr(choice, "message", None) else getattr(choice, "text", "")
+                return {"text": text, "finish_reason": getattr(choice, "finish_reason", None)}
+            else:
+                return {"text": "", "finish_reason": "unknown"}
         else:
-            return {"text": "", "finish_reason": "unknown"}
+            completion_kwargs = dict(base_kwargs)
+            completion_kwargs["prompt"] = prompt
+            logger.info(f"Calling vLLM Text Completion API: {{'model': '{self.model_name}', 'use_chat': False, 'max_tokens': {base_kwargs['max_tokens']}}}")
+            response = await self.client.completions.create(**completion_kwargs)
+            if response.choices and len(response.choices) > 0:
+                choice = response.choices[0]
+                text = getattr(choice, "text", "")
+                return {"text": text, "finish_reason": getattr(choice, "finish_reason", None)}
+            else:
+                return {"text": "", "finish_reason": "unknown"}
     
     async def close(self):
         """Close client connection"""
@@ -144,7 +158,7 @@ class AsyncVLLMClient:
 class AsearcherVisualDemo:
     """ASearcher Visual Demo Service"""
     
-    def __init__(self, llm_url: str = None, model_name: str = "default", api_key: str = "EMPTY"):
+    def __init__(self, llm_url: str = None, model_name: str = "default", api_key: str = "EMPTY", use_chat_completion: bool = True):
         self.app = FastAPI(title="ASearcher Visual Demo API", version="1.0.0")
         self.setup_cors()
         self.setup_routes()
@@ -155,6 +169,7 @@ class AsearcherVisualDemo:
         self.llm_url = llm_url or "http://localhost:8000"
         self.model_name = model_name
         self.api_key = api_key
+        self.use_chat_completion = use_chat_completion
         self.llm = None
         self.tokenizer = None
         
@@ -170,7 +185,7 @@ class AsearcherVisualDemo:
 
     def _initialize_vllm_client(self):
         """Initialize vLLM client"""
-        self.llm = AsyncVLLMClient(self.llm_url, self.model_name, self.api_key)
+        self.llm = AsyncVLLMClient(self.llm_url, self.model_name, self.api_key, use_chat_completion=self.use_chat_completion)
         
         model_path = "/Users/hechuyi/ASearcher-Web-QwQ"
         try:
@@ -679,9 +694,9 @@ class AsearcherVisualDemo:
                     break
         return tool_calls
 
-def create_app(llm_url: str = None, model_name: str = "default", api_key: str = "EMPTY"):
+def create_app(llm_url: str = None, model_name: str = "default", api_key: str = "EMPTY", use_chat_completion: bool = True):
     """Create FastAPI application"""
-    service = AsearcherVisualDemo(llm_url, model_name, api_key)
+    service = AsearcherVisualDemo(llm_url, model_name, api_key, use_chat_completion=use_chat_completion)
     return service.app
 
 def get_app():
@@ -689,7 +704,9 @@ def get_app():
     llm_url = os.environ.get('ASEARCHER_LLM_URL', 'http://0.0.0.0:50000')
     model_name = os.environ.get('ASEARCHER_MODEL_NAME', 'default')
     api_key = os.environ.get('ASEARCHER_API_KEY', 'EMPTY')
-    return create_app(llm_url, model_name, api_key)
+    use_chat_env = os.environ.get('ASEARCHER_USE_CHAT_COMPLETION', '1')
+    use_chat_completion = use_chat_env in ['1', 'true', 'True', 'YES', 'yes']
+    return create_app(llm_url, model_name, api_key, use_chat_completion=use_chat_completion)
 
 app = None
 
@@ -704,6 +721,10 @@ def main():
     parser.add_argument("--model-name", default="ASearcher-Web-7B", help="Model name")
     parser.add_argument("--api-key", default="EMPTY", help="API key")
     parser.add_argument("--reload", action="store_true", help="Enable auto reload")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--use-chat-completion", dest="use_chat_completion", action="store_true", help="Use chat completion (default)")
+    group.add_argument("--no-chat-completion", dest="use_chat_completion", action="store_false", help="Use text completion API")
+    parser.set_defaults(use_chat_completion=True)
     
     args = parser.parse_args()
     
@@ -712,12 +733,14 @@ def main():
     print(f"   vLLM server: {args.llm_url}")
     print(f"   Model name: {args.model_name}")
     print(f"   API key: {args.api_key}")
+    print(f"   Use chat completion: {args.use_chat_completion}")
     
     if args.reload:
         os.environ.update({
             'ASEARCHER_LLM_URL': args.llm_url,
             'ASEARCHER_MODEL_NAME': args.model_name,
-            'ASEARCHER_API_KEY': args.api_key
+            'ASEARCHER_API_KEY': args.api_key,
+            'ASEARCHER_USE_CHAT_COMPLETION': '1' if args.use_chat_completion else '0'
         })
         if args.model_name != "default":
             os.environ['MODEL_PATH'] = args.model_name
@@ -725,7 +748,7 @@ def main():
         print("🔄 Auto reload mode enabled")
         uvicorn.run("asearcher_visual_demo:get_app", host=args.host, port=args.port, reload=True)
     else:
-        app = create_app(args.llm_url, args.model_name, args.api_key)
+        app = create_app(args.llm_url, args.model_name, args.api_key, use_chat_completion=args.use_chat_completion)
         uvicorn.run(app, host=args.host, port=args.port, reload=False)
 
 if __name__ == "__main__":
