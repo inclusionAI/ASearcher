@@ -1,4 +1,3 @@
-# Copyright 2025 Ant Group Inc.
 import json
 from typing import List, Tuple
 
