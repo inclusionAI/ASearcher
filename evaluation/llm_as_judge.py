@@ -15,7 +15,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_names", default="hotpotqa_500", type=str)
     parser.add_argument("--data_dir", default="./data", type=str)
-    parser.add_argument("--model_name_or_path", default="/storage/openpsi/models/Qwen__Qwen2.5-72B-Instruct", type=str)
+    parser.add_argument("--model_name_or_path", default="Qwen__Qwen2.5-72B-Instruct", type=str)
     parser.add_argument("--use-openai", default=False, type=eval, choices=[True, False])
     parser.add_argument("--judge-prompt", type=str, default="default")
     parser.add_argument("--output_dir", default="./output", type=str)
@@ -70,7 +70,7 @@ def llm_as_judge(args):
     set_seed(seeds_to_process[0])  # Use first seed for initialization
 
     if not args.use_openai:
-        args.model_name_or_path = "/storage/openpsi/models/Qwen__Qwen2.5-72B-Instruct"
+        args.model_name_or_path = "Qwen__Qwen2.5-72B-Instruct"
         args.tensor_parallel_size=4
         args.data_parallel_size=2
         llm = get_sglang_llm(args)

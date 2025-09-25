@@ -288,7 +288,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_names", default="hotpotqa_500", type=str)
     parser.add_argument("--data_dir", default="./data", type=str)
-    parser.add_argument("--model_name_or_path", default="/storage/openpsi/models/Qwen__Qwen3-1.7B/", type=str)
+    parser.add_argument("--model_name_or_path", default="Qwen__Qwen3-1.7B/", type=str)
     parser.add_argument("--output_dir", default="./output", type=str)
     parser.add_argument("--prompt_type", default="none", type=str)
     parser.add_argument("--agent-type", default="areal-search-reasoning-v2", type=str)

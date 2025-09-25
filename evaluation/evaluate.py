@@ -248,7 +248,7 @@ JUDGE_DICT = {
     "default": DefaultJudge,
 }
 
-async def llm_as_judge_async(fname_pattern, llm, model_path="/storage/openpsi/models/Qwen__Qwen2.5-72B-Instruct", use_openai=False, judge_prompt="default"):
+async def llm_as_judge_async(fname_pattern, llm, model_path="Qwen__Qwen2.5-72B-Instruct", use_openai=False, judge_prompt="default"):
     from transformers import AutoTokenizer
 
     judge = JUDGE_DICT[judge_prompt]()
