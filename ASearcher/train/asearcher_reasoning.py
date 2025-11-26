@@ -49,7 +49,7 @@ from areal.utils.redistributor import redistribute
 
 import sys
 from pathlib import Path
-# sys.path.append("/storage/openpsi/users/xushusheng.xss/projects/ASearcher-Lite@0908")
+
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from ASearcher.train.reasoning_agent import run_agent
